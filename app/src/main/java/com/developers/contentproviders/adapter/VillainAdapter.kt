@@ -1,59 +1,63 @@
 package com.developers.contentproviders.adapter
 
-import android.content.Context
-import android.database.Cursor
-import androidx.recyclerview.widget.RecyclerView
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import com.developers.contentproviders.MainActivity
-import com.developers.contentproviders.R
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
 import com.developers.contentproviders.data.Villains
-import kotlinx.android.synthetic.main.item_row.view.*
-import java.util.logging.Logger
+import com.developers.contentproviders.databinding.ItemRowBinding
 
 /**
- * Created by Amanjeet Singh on 25/11/17.
+ * RecyclerView Adapter for displaying Villains using modern ListAdapter with DiffUtil
  */
-class VillainAdapter(val context: Context) : RecyclerView.Adapter<VillainAdapter.MyViewHolder>() {
+class VillainAdapter(
+    private val onItemClick: (Villains) -> Unit = {}
+) : ListAdapter<Villains, VillainAdapter.VillainViewHolder>(VillainsDiffCallback()) {
 
-    lateinit var mCursor: Cursor
-
-    companion object {
-        val log = Logger.getLogger(MainActivity::class.java.name)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VillainViewHolder {
+        val binding = ItemRowBinding.inflate(
+            LayoutInflater.from(parent.context), 
+            parent, 
+            false
+        )
+        return VillainViewHolder(binding)
     }
 
-    override fun getItemCount(): Int {
-        if(mCursor.count>0){
-            return mCursor.count
+    override fun onBindViewHolder(holder: VillainViewHolder, position: Int) {
+        val current = getItem(position)
+        holder.bind(current)
+    }
+
+    inner class VillainViewHolder(
+        private val binding: ItemRowBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        init {
+            binding.root.setOnClickListener {
+                val position = adapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemClick(getItem(position))
+                }
+            }
         }
-        else{
-            return 0
+
+        fun bind(villain: Villains) {
+            binding.apply {
+                nameTextView.text = villain.villainName
+                idTextView.text = villain.id.toString()
+                seriesTextView.text = villain.villainSeries
+            }
         }
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MyViewHolder {
-        val view = LayoutInflater.from(context).inflate(R.layout.item_row, parent, false)
-        return MyViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: MyViewHolder, position: Int) {
-        if (mCursor.moveToPosition(position)) {
-            holder?.bindItems(mCursor)
+    class VillainsDiffCallback : DiffUtil.ItemCallback<Villains>() {
+        override fun areItemsTheSame(oldItem: Villains, newItem: Villains): Boolean {
+            return oldItem.id == newItem.id
         }
-    }
 
-    class MyViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-
-        fun bindItems(cursor: Cursor) {
-            itemView.name_text_view.text =cursor.getString(cursor.getColumnIndex(Villains.VILLAIN_NAME))
-            itemView.id_text_view.text = cursor.getString(cursor.getColumnIndex(Villains.COLUMN_ID)).toString()
-            itemView.series_text_view.text = cursor.getString(cursor.getColumnIndex(Villains.VILLAIN_SERIES))
+        override fun areContentsTheSame(oldItem: Villains, newItem: Villains): Boolean {
+            return oldItem == newItem
         }
-    }
-
-    fun setVillains(cursor: Cursor) {
-        mCursor = cursor
-        notifyDataSetChanged()
     }
 }

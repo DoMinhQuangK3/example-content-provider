@@ -1,71 +1,78 @@
 package com.developers.contentproviders
 
-
 import android.content.ContentValues
-import android.database.Cursor
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import androidx.loader.app.LoaderManager
-import androidx.loader.content.CursorLoader
-import androidx.loader.content.Loader
+import android.util.Log
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.developers.contentproviders.adapter.VillainAdapter
 import com.developers.contentproviders.data.Villains
-import kotlinx.android.synthetic.main.activity_main.*
-import org.jetbrains.anko.doAsync
-import java.util.logging.Logger
+import com.developers.contentproviders.databinding.ActivityMainBinding
+import com.developers.contentproviders.viewmodel.VillainsViewModel
+import kotlinx.coroutines.launch
 
-class MainActivity : AppCompatActivity(), LoaderManager.LoaderCallbacks<Cursor> {
+/**
+ * Main Activity demonstrating Content Provider usage with modern Android architecture
+ */
+class MainActivity : AppCompatActivity() {
 
-    private lateinit var mAdapter: VillainAdapter
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var adapter: VillainAdapter
+    private val villainsViewModel: VillainsViewModel by viewModels()
 
     companion object {
-        const val LOADER_VILLAIN = 1
-        val log = Logger.getLogger(MainActivity::class.java.name)
+        private const val TAG = "MainActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        val layoutManager = LinearLayoutManager(applicationContext)
-        doAsync {
-            //Insert through content provider
-            val values = ContentValues()
-            values.put(Villains.VILLAIN_NAME, "Gustavo Fring")
-            values.put(Villains.VILLAIN_SERIES, "Breaking Bad")
-            contentResolver.insert(VillainProvider.uri, values)
-        }
-        layoutManager.orientation = LinearLayoutManager.VERTICAL
-        recycler_view.layoutManager = layoutManager
-        supportLoaderManager.initLoader(LOADER_VILLAIN, null, this)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        setupRecyclerView()
+        observeViewModel()
+        insertSampleDataThroughContentProvider()
     }
 
-    override fun onCreateLoader(id: Int, args: Bundle?): Loader<Cursor> {
-        when (id) {
-            LOADER_VILLAIN -> {
-                return CursorLoader(applicationContext, VillainProvider.uri, arrayOf(Villains.VILLAIN_NAME,
-                        Villains.VILLAIN_SERIES, Villains.COLUMN_ID), null, null, null)
-            }
-            else -> {
-                throw IllegalArgumentException()
-            }
+    private fun setupRecyclerView() {
+        adapter = VillainAdapter { villain ->
+            // Handle item click
+            Log.d(TAG, "Clicked on villain: ${villain.villainName}")
+        }
+        
+        binding.recyclerView.apply {
+            this.adapter = this@MainActivity.adapter
+            layoutManager = LinearLayoutManager(this@MainActivity)
         }
     }
 
-    override fun onLoaderReset(loader: Loader<Cursor>) {
-        when (loader.id) {
-            LOADER_VILLAIN -> {
-                log.info("In RESET")
+    private fun observeViewModel() {
+        villainsViewModel.allVillains.observe(this) { villains ->
+            // Update the cached copy of the villains in the adapter.
+            villains?.let { 
+                adapter.submitList(it)
+                Log.d(TAG, "Updated villains list with ${it.size} items")
             }
         }
     }
 
-    override fun onLoadFinished(loader: Loader<Cursor>, data: Cursor?) {
-        when (loader.id) {
-            LOADER_VILLAIN -> {
-                mAdapter = VillainAdapter(applicationContext)
-                recycler_view.adapter = mAdapter
-                mAdapter.setVillains(data as Cursor)
+    /**
+     * Demonstrates inserting data through Content Provider
+     */
+    private fun insertSampleDataThroughContentProvider() {
+        lifecycleScope.launch {
+            try {
+                val values = ContentValues().apply {
+                    put(Villains.VILLAIN_NAME, "Gustavo Fring")
+                    put(Villains.VILLAIN_SERIES, "Breaking Bad")
+                }
+                
+                val uri = contentResolver.insert(VillainProvider.VILLAINS_URI, values)
+                Log.d(TAG, "Inserted villain through ContentProvider: $uri")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error inserting data through ContentProvider", e)
             }
         }
     }
