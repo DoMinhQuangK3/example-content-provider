@@ -3,12 +3,14 @@ package com.developers.contentproviders.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.asLiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.developers.contentproviders.data.Villains
 import com.developers.contentproviders.data.VillainsDatabase
 import com.developers.contentproviders.repository.VillainsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 
 /**
@@ -17,30 +19,72 @@ import kotlinx.coroutines.launch
 class VillainsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: VillainsRepository
-    val allVillains: LiveData<List<Villains>>
+    
+    private val _uiState = MutableLiveData<UiState<List<Villains>>>()
+    val uiState: LiveData<UiState<List<Villains>>> = _uiState
 
     init {
         val villainsDao = VillainsDatabase.getDatabase(application, viewModelScope).villainDao()
         repository = VillainsRepository(villainsDao)
-        allVillains = repository.allVillains.asLiveData()
+        loadVillains()
+    }
+
+    /**
+     * Load villains with proper state management
+     */
+    private fun loadVillains() {
+        viewModelScope.launch {
+            repository.allVillains
+                .onStart { _uiState.value = UiState.Loading }
+                .catch { exception -> 
+                    _uiState.value = UiState.Error(exception)
+                }
+                .collect { villains ->
+                    _uiState.value = UiState.Success(villains)
+                }
+        }
+    }
+
+    /**
+     * Refresh data
+     */
+    fun refresh() {
+        loadVillains()
     }
 
     /**
      * Launching a new coroutine to insert the data in a non-blocking way
      */
     fun insert(villain: Villains) = viewModelScope.launch(Dispatchers.IO) {
-        repository.insert(villain)
+        try {
+            repository.insert(villain)
+        } catch (e: Exception) {
+            _uiState.postValue(UiState.Error(e))
+        }
     }
 
     fun update(villain: Villains) = viewModelScope.launch(Dispatchers.IO) {
-        repository.update(villain)
+        try {
+            repository.update(villain)
+        } catch (e: Exception) {
+            _uiState.postValue(UiState.Error(e))
+        }
     }
 
     fun delete(villainId: Long) = viewModelScope.launch(Dispatchers.IO) {
-        repository.delete(villainId)
+        try {
+            repository.delete(villainId)
+        } catch (e: Exception) {
+            _uiState.postValue(UiState.Error(e))
+        }
     }
 
     suspend fun getVillainById(id: Long): Villains? {
-        return repository.getVillainById(id)
+        return try {
+            repository.getVillainById(id)
+        } catch (e: Exception) {
+            _uiState.postValue(UiState.Error(e))
+            null
+        }
     }
 }
